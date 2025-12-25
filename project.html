@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Industrial Monitoring Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        :root{
+            --bg: #0f172a;
+            --bg-alt: #111827;
+            --card: #1f2937;
+            --accent: #3b82f6;
+            --accent-soft: rgba(59,130,246,0.12);
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{
+            font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+            background:radial-gradient(circle at top,var(--bg-alt),var(--bg));
+            color:var(--text);
+            padding:20px;
+        }
+        .app-shell{
+            max-width:1200px;
+            margin:0 auto;
+        }
+        header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:20px;
+        }
+        header h1{
+            font-size:24px;
+            letter-spacing:0.04em;
+        }
+        .badge{
+            padding:4px 10px;
+            border-radius:999px;
+            background:var(--accent-soft);
+            color:var(--accent);
+            font-size:12px;
+        }
+        .layout{
+            display:grid;
+            grid-template-columns:2fr 3fr;
+            gap:20px;
+        }
+        @media(max-width:900px){
+            .layout{grid-template-columns:1fr;}
+        }
+        .card{
+            background:rgba(15,23,42,0.9);
+            border-radius:16px;
+            padding:16px 18px;
+            box-shadow:0 18px 40px rgba(0,0,0,0.35);
+            border:1px solid rgba(148,163,184,0.15);
+            backdrop-filter:blur(12px);
+        }
+        .card-header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:12px;
+        }
+        .card-header h2{
+            font-size:15px;
+            text-transform:uppercase;
+            letter-spacing:0.12em;
+            color:var(--muted);
+        }
+        .pill{
+            font-size:11px;
+            padding:2px 8px;
+            border-radius:999px;
+            border:1px solid rgba(148,163,184,0.3);
+            color:var(--muted);
+        }
+        .metrics-grid{
+            display:grid;
+            grid-template-columns:repeat(3,1fr);
+            gap:12px;
+            margin-top:8px;
+        }
+        @media(max-width:600px){
+            .metrics-grid{grid-template-columns:1fr;}
+        }
+        .metric{
+            padding:10px 12px;
+            border-radius:12px;
+            background:radial-gradient(circle at top,var(--bg-alt),var(--card));
+            border:1px solid rgba(55,65,81,0.7);
+        }
+        .metric-label{
+            font-size:11px;
+            text-transform:uppercase;
+            letter-spacing:0.12em;
+            color:var(--muted);
+            margin-bottom:6px;
+        }
+        .metric-value{
+            font-size:22px;
+            font-weight:600;
+        }
+        .metric-unit{
+            font-size:11px;
+            color:var(--muted);
+            margin-left:4px;
+        }
+        .metric-sub{
+            font-size:11px;
+            color:var(--muted);
+            margin-top:4px;
+        }
+        .status-chip{
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            padding:6px 10px;
+            border-radius:999px;
+            font-size:12px;
+        }
+        .dot{
+            width:8px;
+            height:8px;
+            border-radius:999px;
+        }
+        .dot.ok{background:var(--success);}
+        .dot.bad{background:var(--danger);}
+        .status-chip.ok{
+            background:rgba(22,163,74,0.1);
+            color:var(--success);
+        }
+        .status-chip.bad{
+            background:rgba(239,68,68,0.08);
+            color:var(--danger);
+        }
+        .status-meta{
+            font-size:11px;
+            color:var(--muted);
+            margin-top:4px;
+        }
+        .tabs{
+            display:flex;
+            gap:8px;
+            margin-bottom:10px;
+        }
+        .tab{
+            padding:6px 12px;
+            border-radius:999px;
+            font-size:12px;
+            border:1px solid transparent;
+            background:transparent;
+            color:var(--muted);
+            cursor:pointer;
+        }
+        .tab.active{
+            border-color:var(--accent);
+            background:var(--accent-soft);
+            color:var(--text);
+        }
+        .chart-wrapper{
+            position:relative;
+            height:320px;
+        }
+        .footer{
+            margin-top:18px;
+            font-size:11px;
+            color:var(--muted);
+            display:flex;
+            justify-content:space-between;
+            gap:8px;
+            flex-wrap:wrap;
+        }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <header>
+        <div>
+            <h1>Data‑Driven Plant Monitor</h1>
+            <div class="badge">Line‑1 • Packaging Cell</div>
+        </div>
+        <div style="text-align:right;font-size:12px;color:var(--muted);">
+            <div id="nowText">--:--:--</div>
+            <div>Auto‑refresh: 2s</div>
+        </div>
+    </header>
+
+    <div class="layout">
+        <!-- Left: Live KPIs + Status -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Live KPIs</h2>
+                <span class="pill" id="windowText">Last 40 sec</span>
+            </div>
+
+            <div class="status-chip ok" id="statusChip">
+                <span class="dot ok" id="statusDot"></span>
+                <span id="statusText">Running nominally</span>
+            </div>
+            <div class="status-meta" id="statusMeta">No active alerts.</div>
+
+            <div class="metrics-grid">
+                <div class="metric">
+                    <div class="metric-label">Temperature</div>
+                    <div class="metric-value" id="tempVal">--<span class="metric-unit">°C</span></div>
+                    <div class="metric-sub" id="tempSub">Target: 65 °C</div>
+                </div>
+
+                <div class="metric">
+                    <div class="metric-label">Vibration</div>
+                    <div class="metric-value" id="vibVal">--<span class="metric-unit">mm/s</span></div>
+                    <div class="metric-sub" id="vibSub">Soft limit: 8 mm/s</div>
+                </div>
+
+                <div class="metric">
+                    <div class="metric-label">Pressure</div>
+                    <div class="metric-value" id="pressVal">--<span class="metric-unit">bar</span></div>
+                    <div class="metric-sub" id="pressSub">Range: 2–9 bar</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Charts with tabs -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Telemetry</h2>
+                <span class="pill">Realtime trend</span>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-chart="temp">Temperature</button>
+                <button class="tab" data-chart="vib">Vibration</button>
+                <button class="tab" data-chart="press">Pressure</button>
+                <button class="tab" data-chart="all">All signals</button>
+            </div>
+
+            <div class="chart-wrapper">
+                <canvas id="mainChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <span>Demo mode: synthetic sensor data (no hardware connected).</span>
+        <span>Ready for integration with Flask / SSE / MQTT backend.</span>
+    </div>
+</div>
+
+<script>
+    function updateNow(){
+        const now = new Date();
+        document.getElementById('nowText').textContent =
+            now.toLocaleTimeString();
+    }
+    setInterval(updateNow,1000);
+    updateNow();
+
+    const ctx = document.getElementById('mainChart').getContext('2d');
+
+    const baseConfig = {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Temperature (°C)',
+                    data: [],
+                    borderColor: '#f97316',
+                    backgroundColor: 'rgba(248, 113, 113, 0.12)',
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Vibration (mm/s)',
+                    data: [],
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    hidden: true
+                },
+                {
+                    label: 'Pressure (bar)',
+                    data: [],
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.10)',
+                    tension: 0.35,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    hidden: true
+                }
+            ]
+        },
+        options: {
+            responsive:true,
+            maintainAspectRatio:false,
+            plugins:{
+                legend:{labels:{color:'#e5e7eb'}},
+                tooltip:{mode:'index',intersect:false}
+            },
+            interaction:{mode:'index',intersect:false},
+            scales:{
+                x:{
+                    ticks:{color:'#9ca3af', maxRotation:0},
+                    grid:{color:'rgba(55,65,81,0.4)'}
+                },
+                y:{
+                    ticks:{color:'#9ca3af'},
+                    grid:{color:'rgba(31,41,55,0.5)'}
+                }
+            }
+        }
+    };
+
+    const chart = new Chart(ctx, baseConfig);
+
+    function generateSample(){
+        return {
+            temperature: +(60 + Math.random()*20).toFixed(2),
+            vibration: +(2 + Math.random()*6).toFixed(2),
+            pressure: +(3 + Math.random()*5).toFixed(2)
+        };
+    }
+
+    function evaluateStatus(d){
+        let level = 'OK';
+        let reason = 'All metrics within preferred bands.';
+
+        if (d.temperature > 90 || d.vibration > 9 || d.pressure > 9){
+            level = 'CRITICAL';
+            reason = 'Limits exceeded – immediate attention required.';
+        } else if (d.temperature > 80 || d.vibration > 7.5 || d.pressure > 8.5){
+            level = 'WARNING';
+            reason = 'Operating close to upper limits.';
+        }
+        return {level, reason};
+    }
+
+    function pushPoint(dataset, label, value){
+        const maxPoints = 20;
+        chart.data.labels.push(label);
+        dataset.data.push(value);
+
+        if (chart.data.labels.length > maxPoints){
+            chart.data.labels.shift();
+            chart.data.datasets.forEach(ds => ds.data.shift());
+        }
+    }
+
+    function tick(){
+        const sample = generateSample();
+        const timeLabel = new Date().toLocaleTimeString();
+
+        pushPoint(chart.data.datasets[0], timeLabel, sample.temperature);
+        pushPoint(chart.data.datasets[1], timeLabel, sample.vibration);
+        pushPoint(chart.data.datasets[2], timeLabel, sample.pressure);
+        chart.update('none');
+
+        document.getElementById('tempVal').innerHTML =
+            sample.temperature.toFixed(2) + '<span class="metric-unit">°C</span>';
+        document.getElementById('vibVal').innerHTML =
+            sample.vibration.toFixed(2) + '<span class="metric-unit">mm/s</span>';
+        document.getElementById('pressVal').innerHTML =
+            sample.pressure.toFixed(2) + '<span class="metric-unit">bar</span>';
+
+        const {level, reason} = evaluateStatus(sample);
+        const chip = document.getElementById('statusChip');
+        const dot  = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        const meta = document.getElementById('statusMeta');
+
+        chip.classList.remove('ok','bad');
+        dot.classList.remove('ok','bad');
+
+        if (level === 'OK'){
+            chip.classList.add('ok');
+            dot.classList.add('ok');
+            text.textContent = 'Running nominally';
+        } else if (level === 'WARNING'){
+            chip.classList.add('bad');
+            dot.classList.add('bad');
+            text.textContent = 'Running with warnings';
+        } else {
+            chip.classList.add('bad');
+            dot.classList.add('bad');
+            text.textContent = 'Critical condition';
+        }
+        meta.textContent = reason;
+    }
+
+    setInterval(tick, 2000);
+    tick();
+
+    document.querySelectorAll('.tab').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+            document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const mode = btn.dataset.chart;
+            const ds = chart.data.datasets;
+
+            if (mode === 'temp'){
+                ds[0].hidden = false; ds[1].hidden = true; ds[2].hidden = true;
+            } else if (mode === 'vib'){
+                ds[0].hidden = true; ds[1].hidden = false; ds[2].hidden = true;
+            } else if (mode === 'press'){
+                ds[0].hidden = true; ds[1].hidden = true; ds[2].hidden = false;
+            } else {
+                ds[0].hidden = false; ds[1].hidden = false; ds[2].hidden = false;
+            }
+            chart.update();
+        });
+    });
+</script>
+</body>
+</html>
